@@ -1,0 +1,57 @@
+
+server {
+
+    {{#multisite}}
+    # Uncomment the following line for domain mapping
+    # listen 80 default_server;
+    {{/multisite}}
+
+    server_name {{site_name}} {{#multisite}}*{{/multisite}}{{^multisite}}www{{/multisite}}.{{site_name}};
+
+    {{#multisite}}
+    # Uncomment the following line for domain mapping
+    #server_name_in_redirect off;
+    {{/multisite}}
+
+    access_log /var/log/nginx/{{site_name}}.access.log {{^wpredis}}{{^static}}rt_cache{{/static}}{{/wpredis}}{{#wpredis}}rt_cache_redis{{/wpredis}};
+    error_log /var/log/nginx/{{site_name}}.error.log;
+
+    {{#proxy}}
+    add_header X-Proxy-Cache $upstream_cache_status;
+    location / {
+        proxy_pass http://{{host}}:{{port}};
+        proxy_redirect      off;
+        include proxy_params;
+    }
+
+    # Security settings for better privacy
+    # Deny hidden files
+    location ~ /\.(?!well-known\/) {
+        deny all;
+    }
+    # letsencrypt validation
+    location /.well-known/acme-challenge/ {
+        alias /var/www/html/.well-known/acme-challenge/;
+        allow all;
+        auth_basic off;
+    }
+    {{/proxy}}
+
+    {{^proxy}}
+    root {{webroot}}/htdocs;
+
+    index {{^static}}index.php{{/static}} index.html index.htm;
+
+    {{#static}}
+    location / {
+        try_files $uri $uri/ =404;
+    }
+    {{/static}}
+
+    {{^static}}include {{#basic}}common/{{kc_php}}.conf;{{/basic}}{{#wpfc}}common/wpfc-{{kc_php}}.conf;{{/wpfc}}{{#wpsc}}common/wpsc-{{kc_php}}.conf;{{/wpsc}}{{#wpredis}}common/redis-{{kc_php}}.conf;{{/wpredis}}{{#wprocket}}common/wprocket-{{kc_php}}.conf;{{/wprocket}}{{#wpce}}common/wpce-{{kc_php}}.conf;{{/wpce}}
+    {{#wpsubdir}}include common/wpsubdir.conf;{{/wpsubdir}}{{/static}}
+    {{#wp}}include common/wpcommon-{{kc_php}}.conf;{{/wp}}
+    include common/locations-kc.conf;{{/proxy}}
+    include {{webroot}}/conf/nginx/*.conf;
+
+}

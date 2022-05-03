@@ -1,0 +1,424 @@
+#!/usr/bin/env bash
+#
+# Keepcloud travis testing script
+#
+#
+# Colors
+CSI='\033['
+CRED="${CSI}1;31m"
+CGREEN="${CSI}1;32m"
+CEND="${CSI}0m"
+
+export DEBIAN_FRONTEND=noninteractive
+unset LANG
+export LANG='en_US.UTF-8'
+export LC_ALL='C.UTF-8'
+kc_distro=$(lsb_release -sc)
+
+if [ -z "$1" ]; then
+    {
+        apt-get -qq purge mysql* graphviz* redis* php73-* php-*
+        apt-get install -qq git python3-setuptools python3-dev python3-apt ccze tree
+        sudo apt-get -qq autoremove --purge
+    } >/dev/null 2>&1
+fi
+
+exit_script() {
+    curl --progress-bar --upload-file /var/log/kc/keepcloud.log https://transfer.vtbox.net/"$(basename keepcloud.txt)" && echo ""
+    exit 1
+}
+
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       stack install             '
+echo -e "${CGREEN}#############################################${CEND}"
+if [ "$kc_distro" != "xenial" ]; then
+stack_list='nginx php php73 php74 php80 php81 mysql redis fail2ban clamav proftpd netdata phpmyadmin composer dashboard extplorer adminer redis sendmail phpredisadmin mysqltuner utils ufw cheat nanorc'
+else
+stack_list='nginx php php73 php74 php80 php81 mysql redis fail2ban clamav proftpd netdata phpmyadmin composer dashboard extplorer adminer redis phpredisadmin mysqltuner utils ufw cheat nanorc'
+fi
+for stack in $stack_list; do
+    echo -ne "       Installing $stack               [..]\r"
+    if {
+        kc stack install --${stack}
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Installing $stack                [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Installing $stack              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       Simple site create              '
+echo -e "${CGREEN}#############################################${CEND}"
+site_types='html php php72 php73 php74 php80 php81 mysql wp wpfc wpsc wpredis wpce wprocket wpsubdomain wpsubdir ngxblocker'
+for site in $site_types; do
+    echo -ne "       Creating $site               [..]\r"
+    if {
+        kc site create ${site}.net --${site}
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Creating $site                [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Creating $site              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo
+kc site info php.net
+echo
+echo
+kc site info php72.net
+echo
+echo
+kc site list
+echo
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc site update --php74              '
+echo -e "${CGREEN}#############################################${CEND}"
+other_site_types='mysql php72 php73 wp wpfc wpsc wpredis wpce wprocket wpsubdomain wpsubdir'
+for site in $other_site_types; do
+    echo -ne "       Updating site to $site php74              [..]\r"
+    if {
+        kc site update ${site}.net --php74
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Updating site to $site php74               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Updating site to $site php74              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo
+kc site info wp.net
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc site update --php73              '
+echo -e "${CGREEN}#############################################${CEND}"
+other_site_types='html mysql wp php72 php73 wpfc wpsc wpredis wpce wprocket wpsubdomain wpsubdir'
+for site in $other_site_types; do
+    echo -ne "       Updating site to $site php73              [..]\r"
+    if {
+        kc site update ${site}.net --php73
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Updating site to $site php73               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Updating site to $site php73              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo
+kc site info wp.net
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc site update --php72              '
+echo -e "${CGREEN}#############################################${CEND}"
+other_site_types='mysql php72 php73 wp wpfc wpsc wpredis wpce wprocket wpsubdomain wpsubdir'
+for site in $other_site_types; do
+    echo -ne "       Updating site to $site php72              [..]\r"
+    if {
+        kc site update ${site}.net --php72
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Updating site to $site php72               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Updating site to $site php72              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo
+kc site info wp.net
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc site update --php80             '
+echo -e "${CGREEN}#############################################${CEND}"
+other_site_types='mysql php72 php73 wp wpfc wpsc wpredis wpce wprocket wpsubdomain wpsubdir'
+for site in $other_site_types; do
+    echo -ne "       Updating site to $site php80              [..]\r"
+    if {
+        kc site update ${site}.net --php80
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Updating site to $site php80               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Updating site to $site php80              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo
+kc site info wp.net
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc site update --php81              '
+echo -e "${CGREEN}#############################################${CEND}"
+other_site_types='mysql php72 php73 wp wpfc wpsc wpredis wpce wprocket wpsubdomain wpsubdir'
+for site in $other_site_types; do
+    echo -ne "       Updating site to $site php81              [..]\r"
+    if {
+        kc site update ${site}.net --php81
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Updating site to $site php81               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Updating site to $site php81              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo
+kc site info wp.net
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc site update WP              '
+echo -e "${CGREEN}#############################################${CEND}"
+
+kc_site_types='wpfc wpsc wpce wprocket wpredis'
+kc site create wp.io --wp >>/dev/null 2>&1
+for site in $wp_site_types; do
+    echo -ne "        Updating WP to $site              [..]\r"
+    if {
+        kc site update wp.io --${site}
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Updating WP to $site               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Updating WP to $site              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc site create wpsubdir              '
+echo -e "${CGREEN}#############################################${CEND}"
+
+wp_site_types='wpfc wpsc wpce wprocket wpredis'
+for site in $wp_site_types; do
+    echo -ne "        Creating wpsubdir $site              [..]\r"
+    if {
+        kc site create wpsubdir"$site".io --wpsubdir --${site}
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Creating wpsubdir $site               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Creating wpsubdir $site              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc site create wpsubdomain              '
+echo -e "${CGREEN}#############################################${CEND}"
+
+wp_site_types='wpfc wpsc wpce wprocket wpredis'
+for site in $wp_site_types; do
+    echo -ne "        Creating wpsubdomain $site              [..]\r"
+    if {
+        kc site create wpsubdomain"$site".io --wpsubdomain --${site}
+    } >>/var/log/kc/test.log; then
+        echo -ne "       Creating wpsubdomain $site               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        Creating wpsubdomain $site              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+if [ -z "$1" ]; then
+    echo -e "${CGREEN}#############################################${CEND}"
+    echo -e '       kc stack upgrade              '
+    echo -e "${CGREEN}#############################################${CEND}"
+    stack_upgrade='nginx php php72 php73 php74 php80 php81 mysql redis netdata dashboard phpmyadmin adminer fail2ban composer ngxblocker mysqltuner'
+    for stack in $stack_upgrade; do
+        echo -ne "      Upgrading $stack               [..]\r"
+        if {
+            kc stack upgrade --${stack} --force
+        } >>/var/log/kc/test.log; then
+            echo -ne "       Upgrading $stack               [${CGREEN}OK${CEND}]\\r"
+            echo -ne '\n'
+        else
+            echo -e "        Upgrading $stack              [${CRED}FAIL${CEND}]"
+            echo -ne '\n'
+            exit_script
+
+        fi
+    done
+fi
+
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc stack migrate --mariadb              '
+echo -e "${CGREEN}#############################################${CEND}"
+
+        echo -ne "      Upgrading mariadb               [..]\r"
+        if {
+            kc stack migrate --mariadb --force --ci
+        } >>/var/log/kc/test.log; then
+            echo -ne "       Upgrading mariadb               [${CGREEN}OK${CEND}]\\r"
+            echo -ne '\n'
+        else
+            echo -e "        Upgrading mariadb              [${CRED}FAIL${CEND}]"
+            echo -ne '\n'
+            exit_script
+
+        fi
+
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc clean              '
+echo -e "${CGREEN}#############################################${CEND}"
+stack_clean='fastcgi redis opcache all'
+for stack in $stack_clean; do
+    echo -ne "       cleaning $stack cache              [..]\r"
+    if {
+        kc clean --${stack}
+    } >>/var/log/kc/test.log; then
+        echo -ne "       cleaning $stack cache               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        cleaning $stack cache              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done
+
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc secure              '
+echo -e "${CGREEN}#############################################${CEND}"
+echo -ne "       kc secure --auth                   [..]\r"
+if {
+    kc secure --auth keepcloud mypassword
+} >>/var/log/kc/test.log; then
+    echo -ne "       kc secure --auth                   [${CGREEN}OK${CEND}]\\r"
+    echo -ne '\n'
+else
+    echo -e "       kc secure --auth                   [${CRED}FAIL${CEND}]"
+    echo -ne '\n'
+    exit_script
+
+fi
+if [ "$kc_distro" != "focal" ]; then
+    echo -ne "       kc secure --sshport                [..]\r"
+    if {
+        kc secure --sshport 2022
+    } >>/var/log/kc/test.log; then
+        echo -ne "       kc secure --sshport                [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "       kc secure --sshport                [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+    echo -ne "       kc secure --ssh                    [..]\r"
+    if {
+        kc secure --ssh --force
+    } >>/var/log/kc/test.log; then
+        echo -ne "       kc secure --ssh                    [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        kc secure --ssh                    [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+fi
+echo -ne "       kc secure --port                   [..]\r"
+if {
+    kc secure --port 22223
+} >>/var/log/kc/test.log; then
+    echo -ne "       kc secure --port                   [${CGREEN}OK${CEND}]\\r"
+    echo -ne '\n'
+else
+    echo -e "       kc secure --port                   [${CRED}FAIL${CEND}]"
+    echo -ne '\n'
+    exit_script
+
+fi
+
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       WP-CLI info             '
+echo -e "${CGREEN}#############################################${CEND}"
+wp --allow-root --info
+
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc site info             '
+echo -e "${CGREEN}#############################################${CEND}"
+
+kc site info wpfc.net
+
+echo
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc info             '
+echo -e "${CGREEN}#############################################${CEND}"
+kc info
+
+# echo -e "${CGREEN}#############################################${CEND}"
+# echo -e '       kc site delete              '
+# echo -e "${CGREEN}#############################################${CEND}"
+# sites=$(kc site list 2>&1)
+# for site in $sites; do
+#     echo -ne "       deleting $site              [..]\r"
+#     if {
+#         kc site delete "$site" --force
+#     } >>/var/log/kc/test.log; then
+#         echo -ne "       deleting $site              [${CGREEN}OK${CEND}]\\r"
+#         echo -ne '\n'
+#     else
+#         echo -e "       deleting $site              [${CRED}FAIL${CEND}]"
+#         echo -ne '\n'
+#         exit_script
+
+#     fi
+# done
+
+echo -e "${CGREEN}#############################################${CEND}"
+echo -e '       kc stack purge              '
+echo -e "${CGREEN}#############################################${CEND}"
+stack_purge='nginx php php73 php74 php80 php81 mysql redis fail2ban clamav proftpd netdata phpmyadmin composer dashboard extplorer adminer redis ufw ngxblocker cheat nanorc'
+for stack in $stack_purge; do
+    echo -ne "       purging $stack              [..]\r"
+    if {
+        kc stack purge --${stack} --force
+    } >>/var/log/kc/test.log; then
+        echo -ne "       purging $stack               [${CGREEN}OK${CEND}]\\r"
+        echo -ne '\n'
+    else
+        echo -e "        purging $stack              [${CRED}FAIL${CEND}]"
+        echo -ne '\n'
+        exit_script
+
+    fi
+done

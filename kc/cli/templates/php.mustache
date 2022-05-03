@@ -1,0 +1,10 @@
+# PHP NGINX CONFIGURATION - Keepcloud {{release}}
+# DO NOT MODIFY, ALL CHANGES WILL BE LOST AFTER AN KeepCloud (kc) UPDATE
+location / {
+  try_files $uri $uri/ /index.php$is_args$args;
+}
+location ~ \.php$ {
+  try_files $uri =404;
+  include fastcgi_params;
+  fastcgi_pass {{upstream}};
+}

@@ -1,0 +1,159 @@
+# NGINX UPSTREAM CONFIGURATION - Keepcloud {{release}}
+# DO NOT MODIFY, ALL CHANGES WILL BE LOST AFTER AN KeepCloud (kc) UPDATE
+#-------------------------------
+# PHP 5.6
+#-------------------------------
+upstream php {
+server 127.0.0.1:{{php}};
+}
+
+upstream debug {
+server 127.0.0.1:{{debug}};
+}
+
+
+#-------------------------------
+# PHP 7.0
+#-------------------------------
+
+upstream php7 {
+server 127.0.0.1:{{php7}};
+}
+upstream debug7 {
+# Debug Pool
+server 127.0.0.1:{{debug7}};
+}
+
+
+#-------------------------------
+# PHP 7.2
+#-------------------------------
+
+# PHP 7.2 upstream with load-balancing on two unix sockets
+upstream php72 {
+    least_conn;
+
+    server unix:/var/run/php/php72-fpm.sock;
+    server unix:/var/run/php/php72-two-fpm.sock;
+
+    keepalive 5;
+}
+
+# PHP 7.2 debug
+upstream debug72 {
+    # Debug Pool
+    server 127.0.0.1:9172;
+}
+
+#-------------------------------
+# PHP 7.3
+#-------------------------------
+
+# PHP 7.3 upstream with load-balancing on two unix sockets
+upstream php73 {
+    least_conn;
+
+    server unix:/var/run/php/php73-fpm.sock;
+    server unix:/var/run/php/php73-two-fpm.sock;
+
+    keepalive 5;
+}
+
+# PHP 7.3 debug
+upstream debug73 {
+    # Debug Pool
+    server 127.0.0.1:9173;
+}
+
+#-------------------------------
+# PHP 7.4
+#-------------------------------
+
+# PHP 7.4 upstream with load-balancing on two unix sockets
+upstream php74 {
+    least_conn;
+
+    server unix:/var/run/php/php74-fpm.sock;
+    server unix:/var/run/php/php74-two-fpm.sock;
+
+    keepalive 5;
+}
+
+# PHP 7.4 debug
+upstream debug74 {
+    # Debug Pool
+    server 127.0.0.1:9174;
+}
+
+#-------------------------------
+# PHP 8.0
+#-------------------------------
+
+# PHP 8.0 upstream with load-balancing on two unix sockets
+upstream php80 {
+    least_conn;
+
+    server unix:/var/run/php/php80-fpm.sock;
+    server unix:/var/run/php/php80-two-fpm.sock;
+
+    keepalive 5;
+}
+
+# PHP 8.0 debug
+upstream debug80 {
+    # Debug Pool
+    server 127.0.0.1:9175;
+}
+
+#-------------------------------
+# PHP 8.1
+#-------------------------------
+
+# PHP 8.1 upstream with load-balancing on two unix sockets
+upstream php81 {
+    least_conn;
+
+    server unix:/var/run/php/php81-fpm.sock;
+    server unix:/var/run/php/php81-two-fpm.sock;
+
+    keepalive 5;
+}
+
+# PHP 8.1 debug
+upstream debug81 {
+    # Debug Pool
+    server 127.0.0.1:9176;
+}
+
+#-------------------------------
+# Netdata
+#-------------------------------
+
+# Netdata Monitoring Upstream
+upstream netdata {
+    server 127.0.0.1:19999;
+    keepalive 64;
+}
+
+#-------------------------------
+# Redis
+#-------------------------------
+
+# Redis cache upstream
+upstream redis {
+    server 127.0.0.1:6379;
+    keepalive 10;
+}
+
+#-------------------------------
+# Multi PHP
+#-------------------------------
+
+# Multi PHP upstream for KeepCloud backend
+upstream multiphp {
+    server unix:/var/run/php/php73-fpm.sock;
+    server unix:/var/run/php/php74-fpm.sock;
+    server unix:/var/run/php/php72-fpm.sock;
+    server unix:/var/run/php/php80-fpm.sock;
+    server unix:/var/run/php/php81-fpm.sock;
+}

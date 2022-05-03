@@ -1,0 +1,896 @@
+#!/usr/bin/env bash
+# -------------------------------------------------------------------------
+# Keepcloud install and update script
+# -------------------------------------------------------------------------
+# Website:       https://Keepcloud.io
+# GitHub:        https://github.com/Keepcloud/kc
+# Copyright (c) 2019-2022 - KeepCloud
+# This script is licensed under M.I.T
+# -------------------------------------------------------------------------
+# wget -qO kc kc.cc && sudo -E bash kc
+# -------------------------------------------------------------------------
+# Version 1.0 - 2022-05-02
+# -------------------------------------------------------------------------
+
+# CONTENTS
+# ---
+# 1. VARIABLES AND DECLARATIONS
+# 2. PREPARE FOR INSTALLATION
+# 3. INSTALLATION
+# 4.
+
+###
+# 1 - Set the CLI output colors
+###
+
+CSI='\033['
+TPUT_RESET="${CSI}0m"
+TPUT_FAIL="${CSI}1;31m"
+TPUT_ECHO="${CSI}1;36m"
+TPUT_OK="${CSI}1;32m"
+
+kc_lib_echo() {
+
+    echo -e "${TPUT_ECHO}${*}${TPUT_RESET}"
+}
+
+kc_lib_echo_info() {
+
+    echo -e "$*"
+}
+
+kc_lib_echo_fail() {
+
+    echo -e "${TPUT_FAIL}${*}${TPUT_RESET}"
+}
+
+###
+# 1 - Capture errors
+###
+
+kc_lib_error() {
+    echo -e "[ $(date) ] ${TPUT_FAIL}${*}${TPUT_RESET}"
+    exit "$2"
+}
+
+###
+# 1 - script argument parsing
+###
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+    -b | --branch)
+        kc_branch="$2"
+        shift
+        ;;
+    --force)
+        kc_force_install="y"
+        ;;
+    --travis)
+        kc_travis="y"
+        kc_force_install="y"
+        ;;
+    --mainline | --beta)
+        kc_branch="mainline"
+        ;;
+    -s | --silent)
+        kc_force_install="y"
+        ;;
+    --purge | --uninstall)
+        kc_purge="y"
+        ;;
+    *) # positional args
+        ;;
+    esac
+    shift
+done
+
+###
+# 1 - Check whether the installation is called with elevated rights
+###
+if [[ $EUID -ne 0 ]]; then
+    kc_lib_echo_fail "Sudo privilege required..."
+    kc_lib_echo_fail "Use: wget -qO kc kc.cc && sudo bash kc  "
+    exit 100
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+unset LANG
+export LANG='en_US.UTF-8'
+export LC_ALL='C.UTF-8'
+
+###
+# 1- Main functions
+###
+
+# check if a command exist
+command_exists() {
+    command -v "$@" >/dev/null 2>&1
+}
+
+# run functions and exit on failure
+_run() {
+    if [ -n "$2" ]; then
+        echo -ne "${TPUT_ECHO}${2}${TPUT_RESET}\t"
+    fi
+    if ! { "$1" >>"$kc_install_log" 2>&1; }; then
+        if [ -n "$2" ]; then
+            echo -e "${TPUT_FAIL}[KO]${TPUT_RESET}"
+        fi
+    else
+        if [ -n "$2" ]; then
+            echo -e "[${TPUT_OK}OK${TPUT_RESET}]"
+        fi
+    fi
+
+}
+
+_curl() {
+    curl -m 10 --retry 3 -sL "$@"
+}
+
+kc_init_variables() {
+    if [ -z "$kc_branch" ]; then
+        if [ "$kc_travis" = "y" ]; then
+            kc_branch=updating-configuration
+        else
+            kc_branch=master
+        fi
+    fi
+    readonly kc_install_log=/var/log/kc/install.log
+    readonly TIME_FORMAT='%d-%b-%Y-%H%M%S'
+    readonly TIME=$(date +"$TIME_FORMAT")
+    readonly NGINX_BACKUP_FILE="/var/lib/kc-backup/nginx-backup.$TIME.tar.zst"
+    readonly EE_BACKUP_FILE="/var/lib/kc-backup/ee-backup.$TIME.tar.zst"
+    readonly KC_BACKUP_FILE="/var/lib/kc-backup/kc-backup.$TIME.tar.zst"
+
+    if [ -x /usr/local/bin/ee ]; then
+        ee_migration=1
+    elif [ -x /usr/local/bin/kc ]; then
+        kc_upgrade=1
+    fi
+}
+
+###
+# 1 - Checking linux distro
+###
+
+kc_check_distro() {
+    local kc_linux_distro
+    kc_linux_distro=$(lsb_release -is)
+    local kc_distro_version
+    kc_distro_version=$(lsb_release -sc)
+    if [ -z "$kc_force_install" ]; then
+        if [ "$kc_linux_distro" != "Ubuntu" ] && [ "$kc_linux_distro" != "Debian" ] && [ "$kc_linux_distro" != "Raspbian" ]; then
+            kc_lib_echo_fail "KeepCloud (kc) only supports Ubuntu, Debian & Raspbian at the moment."
+            kc_lib_echo_fail "You can bypass this warning by adding the flag --force to the install command"
+            kc_lib_echo_fail "Feel free to open a pull-request if you want to add support for another Linux distributions"
+            exit 100
+        else
+            check_kc_linux_distro=$(lsb_release -sc | grep -E "xenial|bionic|jessie|stretch|buster|focal")
+            if [ -z "$check_kc_linux_distro" ]; then
+                kc_lib_echo_fail "KeepCloud (kc) only supports Ubuntu 16.04/18.04/20.04 LTS, Debian 9.x/10.x and Raspbian 9.x/10x.\n
+                You can bypass this warning by adding the flag --force to the install command"
+                exit 100
+            fi
+        fi
+    fi
+
+}
+
+###
+# 1 - To prevent errors or unexpected behaviour, create the log and ACL it
+###
+kc_dir_init() {
+    local kc_log_dir=/var/log/kc
+    local kc_backup_dir=/var/lib/kc-backup
+    local kc_tmp_dir=/var/lib/kc/tmp
+    if [ ! -d "$kc_log_dir" ] || [ ! -d "$kc_backup_dir" ] || [ ! -d "$kc_tmp_dir" ]; then
+
+        mkdir -p "$kc_backup_dir" "$kc_log_dir" "$kc_tmp_dir"
+
+        # create KeepCloud log files
+        touch /var/log/kc/{keepcloud.log,install.log}
+
+        chmod -R 750 "$kc_log_dir" "$kc_backup_dir" "$kc_tmp_dir"
+        chown -R root:adm "$kc_log_dir"
+    fi
+
+}
+
+###
+# 2 - Setup the dependencies for installation
+####
+
+kc_install_dep() {
+    local kc_linux_distro
+    kc_linux_distro=$(lsb_release -is)
+    if [ "$kc_linux_distro" == "Ubuntu" ]; then
+        # install dependencies
+        add-apt-repository ppa:git-core/ppa -y
+        apt-get --option=Dpkg::options::=--force-confmiss --option=Dpkg::options::=--force-confold --assume-yes install \
+            build-essential curl gzip python3-pip python3-apt python3-venv gcc python3-dev sqlite3 git tar software-properties-common pigz \
+            gnupg2 cron ccze rsync apt-transport-https tree haveged ufw unattended-upgrades tzdata ntp zstd idn \
+            python3-distutils-extra libapt-pkg-dev bash-completion >/dev/null 2>&1
+        curl -sL https://build.opensuse.org/projects/home:virtubox/public_key | apt-key add -
+    else
+        # install dependencies
+        apt-get --option=Dpkg::options::=--force-confmiss --option=Dpkg::options::=--force-confold --assume-yes install \
+            build-essential curl gzip dirmngr sudo python3-pip python3-apt python3-venv gcc python3-dev ca-certificates sqlite3 git tar \
+            software-properties-common pigz apt-transport-https gnupg2 cron ccze rsync tree haveged ufw unattended-upgrades tzdata ntp zstd idn \
+            python3-distutils-extra libapt-pkg-dev bash-completion >/dev/null 2>&1
+        # add php repository gpg key
+        [ -d /etc/apt/trusted.gpg.d ] && { wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg; }
+        # add nginx repository gpg key
+        curl -sL https://build.opensuse.org/projects/home:virtubox/public_key | apt-key add -
+    fi
+    locale-gen en
+    # enable unattended upgades
+    if [ ! -f /etc/apt/apt.conf.d/20auto-upgrades ]; then
+        cp -f /usr/share/unattended-upgrades/20auto-upgrades /etc/apt/apt.conf.d/20auto-upgrades
+    fi
+    # upgrade pip
+    python3 -m pip install --upgrade pip
+}
+
+kc_timesync() {
+    # set default ntp pools
+    if [ -f /etc/systemd/timesyncd.conf ]; then
+        if ! grep -q "time.cloudflare.com" /etc/systemd/timesyncd.conf; then
+            sed -e 's/^#NTP=/NTP=time.cloudflare.com 0.ubuntu.pool.ntp.org 1.ubuntu.pool.ntp.org 2.ubuntu.pool.ntp.org 3.ubuntu.pool.ntp.org/' -i /etc/systemd/timesyncd.conf
+            # enable ntp
+            timedatectl set-ntp 1
+        fi
+    fi
+}
+
+###
+# 3 - Create/migrate the essentials
+###
+kc_sync_db() {
+    ###
+    # Switching from EE -> KC
+    ###
+    if [ ! -f /var/lib/kc/dbase.db ]; then
+
+        if [ -f /var/lib/ee/ee.db ]; then
+
+            # Make a backup of the EasyEngine database
+            cp /var/lib/ee/ee.db /var/lib/kc/dbase-ee.db
+
+            # Copy ee database
+            cp /var/lib/ee/ee.db /var/lib/kc/dbase.db
+        else
+            if [ -d /etc/nginx/sites-available ] && [ -d /var/www ]; then
+
+                # Create an empty database for Keepcloud
+                echo "CREATE TABLE sites (
+           id INTEGER PRIMARY KEY     AUTOINCREMENT,
+           sitename UNIQUE,
+           site_type CHAR,
+           cache_type CHAR,
+           site_path  CHAR,
+           created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+           is_enabled INT,
+           is_ssl INT,
+           storage_fs CHAR,
+           storage_db CHAR,
+           db_name VARCHAR,
+           db_user VARCHAR,
+           db_password VARCHAR,
+           db_host VARCHAR,
+           is_hhvm INT INT DEFAULT '0',
+           php_version VARCHAR
+            );" | sqlite3 /var/lib/kc/dbase.db
+
+                # Check site is enable/live or disable
+                AV_SITES="$(basename -a /etc/nginx/sites-available/* | grep -v default)"
+                for site in $AV_SITES; do
+                    if [ -h "/etc/nginx/sites-enabled/$site" ]; then
+                        kc_site_status='1'
+                    else
+                        kc_site_status='0'
+                    fi
+
+                    # Acquire information about the current nginx configuration
+
+                    kc_site_current_type=$(grep "common/" "/etc/nginx/sites-available/$site" | awk -F "/" '{print $2}')
+
+                    if echo "$kc_site_current_type" | grep -q "redis"; then
+                        kc_site_current_cache="wpredis"
+                    elif echo "$kc_site_current_type" | grep -q wpsc; then
+                        kc_site_current_cache="wpsc"
+                    elif echo "$kc_site_current_type" | grep -q wpfc; then
+                        kc_site_current_cache="wpfc"
+                    else
+                        kc_site_current_cache="basic"
+                    fi
+
+                    if echo "$kc_site_current_type" | grep -q wp; then
+                        if echo "$kc_site_current_type" | grep -q wpsubdir; then
+                            kc_site_current="wpsubdir"
+                        elif echo "$kc_site_current_type" | grep -q wpsudomain; then
+                            kc_site_current="wpsubdomain"
+                        else
+                            kc_site_current="wp"
+                        fi
+                    else
+                        if echo "$kc_site_current_type" | grep -q location; then
+                            kc_site_current="proxy"
+                        elif echo "$kc_site_current_type" | grep -q php; then
+                            kc_site_current="html"
+                        else
+                            if [ -f "/var/www/${site}/ee-config.php" ] || [ -f "/var/www/${site}/kc-config.php" ]; then
+                                kc_site_current="mysql"
+                            else
+                                kc_site_current="php"
+                            fi
+                        fi
+                    fi
+
+                    kc_webroot="/var/www/$site"
+
+                    # Import the configuration into the KeepCloud SQLite database
+                    echo "INSERT INTO sites (sitename, site_type, cache_type, site_path, is_enabled, is_ssl, storage_fs, storage_db)
+            VALUES (\"$site\", \"$kc_site_current\", \"$kc_site_current_cache\", \"$kc_webroot\", \"$kc_site_status\", 0, 'ext4', 'mysql');" | sqlite3 /var/lib/kc/dbase.db
+
+                done
+            fi
+        fi
+
+        #        echo "UPDATE sites SET php_version = REPLACE(php_version, '5.6', '7.2');" | sqlite3 /var/lib/kc/dbase.db
+        #        echo "UPDATE sites SET php_version = REPLACE(php_version, '7.0', '7.3');" | sqlite3 /var/lib/kc/dbase.db
+    fi
+}
+
+# Once again, set the proper ACL on the KeepCloud configuration directory
+secure_kc_db() {
+
+    # The owner is root
+    chown -R root:root /var/lib/kc
+    # Only allow access by root, block others
+    chmod -R 600 /var/lib/kc
+
+}
+
+# Update the WP-CLI version
+kc_update_wp_cli() {
+    WP_CLI_PATH=$(command -v wp)
+    if [ -n "$WP_CLI_PATH" ]; then
+        rm -rf "$WP_CLI_PATH"
+    fi
+    # Update WP-CLI to the most recent version
+    wget -qO /usr/local/bin/wp https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    chmod +x /usr/local/bin/wp
+    [ ! -h /usr/bin/wp ] && {
+        ln -s /usr/local/bin/wp /usr/bin/
+    }
+    [ -d /etc/bash_completion.d ] && {
+        wget -qO /etc/bash_completion.d/wp-completion.bash https://raw.githubusercontent.com/wp-cli/wp-cli/master/utils/wp-completion.bash
+    }
+
+}
+
+kc_install_acme_sh() {
+    # check if acme.sh is already installed
+    if [ ! -x /etc/letsencrypt/acme.sh ]; then
+
+        # clone the git repository
+        if [ -d /opt/acme.sh/.git ]; then
+            git -C /opt/acme.sh pull origin master
+        else
+            git clone --depth=50 https://github.com/Neilpang/acme.sh.git /opt/acme.sh -q
+        fi
+        cd /opt/acme.sh || exit 1
+        # create conf directories
+        mkdir -p /etc/letsencrypt/{config,live,renewal}
+        # install acme.sh
+        ./acme.sh --install \
+            --home /etc/letsencrypt \
+            --config-home /etc/letsencrypt/config \
+            --cert-home /etc/letsencrypt/renewal
+    fi
+
+    if [ -x "$HOME/.acme.sh/acme.sh" ]; then
+        # backup acme.sh folder
+        /bin/tar -I zstd -cf /var/lib/kc-backup/acme.sh.tar.zst "$HOME/.acme.sh"
+        # rsync previous certificates to new acme.sh location
+        /usr/bin/rsync -rltgoDpz --exclude="account.conf" \
+            --exclude="acme.sh" \
+            --exclude="acme.sh.env" \
+            --exclude="deploy" \
+            --exclude="dnsapi" \
+            --exclude="http.header" \
+            --exclude="ca" \
+            "$HOME/.acme.sh/" \
+            /etc/letsencrypt/renewal/
+        # remove previous acme.sh folder
+        rm -rf "$HOME/.acme.sh"
+        mkdir "$HOME/.acme.sh"
+        touch "$HOME/.acme.sh/acme.sh.env"
+        # removing previous cronjob
+    fi
+    # Let's Encrypt .well-known folder setup
+    if [ ! -d /var/www/html/.well-known/acme-challenge ]; then
+        mkdir -p /var/www/html/.well-known/acme-challenge
+    fi
+    chown -R www-data:www-data /var/www/html /var/www/html/.well-known
+    chmod 750 /var/www/html /var/www/html/.well-known
+    if [ -x /etc/letsencrypt/acme.sh ]; then
+        export LE_WORKING_DIR="/etc/letsencrypt"
+        export LE_CONFIG_HOME="/etc/letsencrypt/config"
+        /etc/letsencrypt/acme.sh --config-home '/etc/letsencrypt/config' --upgrade --auto-upgrade
+        /etc/letsencrypt/acme.sh --config-home '/etc/letsencrypt/config' --uninstall-cronjob
+        /etc/letsencrypt/acme.sh --config-home '/etc/letsencrypt/config' --install-cronjob
+        /etc/letsencrypt/acme.sh --set-default-ca --server letsencrypt
+    fi
+
+}
+
+# KeepCloud install
+kc_install() {
+    local python_ver
+    python_ver=$(python3 -c "import sys; print(sys.version_info[1])")
+    local kc_distro_codename
+    kc_distro_codename=$(lsb_release -sc)
+    local kc_linux_distro
+    kc_linux_distro=$(lsb_release -is)
+    if [ -d /usr/local/lib/python3."$python_ver"/dist-packages ]; then
+        cd /usr/local/lib/python3."$python_ver"/dist-packages || exit 1
+    fi
+    python3 -m pip uninstall -yq kc KeepCloud ee
+    cd || exit 1
+    if [ -d /opt/kc/lib/python3."$python_ver"/site-packages/apt ]; then
+        source /opt/kc/bin/activate
+        python3 -m pip uninstall setuptools -y
+        python3 -m pip install -I setuptools==57.5.0
+        python3 -m pip install -U pip wheel
+    else
+        rm -rf /opt/kc
+        python3 -m venv /opt/kc
+        source /opt/kc/bin/activate
+        python3 -m pip uninstall setuptools -y
+        python3 -m pip install -I setuptools==57.5.0
+        python3 -m pip install -U pip wheel
+        if [ "$kc_linux_distro" = "Debian" ] || [ "$kc_linux_distro" = "Raspbian" ]; then
+            if [ "$kc_distro_codename" = "stretch" ]; then
+                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.4.y#egg=python-apt
+            else
+                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.8.4.y#egg=python-apt
+            fi
+        else
+            if [ "$kc_distro_codename" = "focal" ]; then
+                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@2.0.0#egg=python-apt
+            elif [ "$kc_distro_codename" = "bionic" ]; then
+                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.6.y#egg=python-apt
+            else
+                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.1.y-xenial#egg=python-apt
+            fi
+        fi
+    fi
+
+    if [ "$kc_branch" = "master" ]; then
+        python3 -m pip install -U keepcloud
+    else
+        python3 -m pip install -I "git+https://github.com/Keepcloud/kc.git@$kc_branch#egg=Keepcloud"
+    fi
+    local python_venv
+    python_venv=$(python3 -c "import sys; print(sys.version_info[1])")
+    cp -rf /opt/kc/lib/python3."$python_venv"/site-packages/usr/* /usr/
+    cp -rn /opt/kc/lib/python3."$python_venv"/site-packages/etc/* /etc/
+    cp -f /opt/kc/lib/python3."$python_venv"/site-packages/etc/bash_completion.d/kc_auto.rc /etc/bash_completion.d/kc_auto.rc
+    rm -rf /usr/local/bin/kc /usr/local/lib/python3."$python_venv"/dist-packages/{etc,usr}
+    ln -s /opt/kc/bin/kc /usr/local/bin/
+    deactivate
+    if [ ! -d /opt/kc/lib/python3."$python_ver"/site-packages/apt ]; then
+        python3 -m venv --system-site-packages /opt/kc
+    fi
+}
+
+# Clone Github repository if it doesn't exist
+kc_travis_install() {
+    local python_ver
+    python_ver=$(python3 -c "import sys; print(sys.version_info[1])")
+    local kc_distro_codename
+    kc_distro_codename=$(lsb_release -sc)
+    local kc_linux_distro
+    kc_linux_distro=$(lsb_release -is)
+    if [ -d ./dist ]; then
+        rm -rf dist
+    fi
+    if [ -f ./setup.py ]; then
+        if [ -d /opt/kc/lib/python3."$python_ver"/site-packages/apt ]; then
+            source /opt/kc/bin/activate
+            python3 -m pip uninstall setuptools -y
+            python3 -m pip install -I setuptools==57.5.0
+            python3 -m pip install -U pip wheel
+        else
+            rm -rf /opt/kc
+            python3 -m venv /opt/kc
+            source /opt/kc/bin/activate
+            python3 -m pip uninstall setuptools -y
+            python3 -m pip install -I setuptools==57.5.0
+            python3 -m pip install -U pip wheel
+            if [ "$kc_linux_distro" = "Debian" ] || [ "$kc_linux_distro" = "Raspbian" ]; then
+                if [ "$kc_distro_codename" = "stretch" ]; then
+                    python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.4.y#egg=python-apt
+                else
+                    python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.8.4.y#egg=python-apt
+                fi
+            else
+                if [ "$kc_distro_codename" = "focal" ]; then
+                    python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@2.0.0#egg=python-apt
+                elif [ "$kc_distro_codename" = "bionic" ]; then
+                    python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.6.y#egg=python-apt
+                else
+                    python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.1.0_beta1ubuntu0.16.04.9#egg=python-apt
+                fi
+            fi
+        fi
+        python3 -m pip install -U .
+    else
+        python3 -m pip install -U "git+https://github.com/KeepCloud/keepcloud.git@$kc_branch#egg=keepcloud"
+    fi
+    cp -rf /opt/kc/lib/python3."$python_ver"/site-packages/usr/* /usr/
+    cp -rn /opt/kc/lib/python3."$python_ver"/site-packages/etc/* /etc/
+    cp -f /opt/kc/lib/python3."$python_ver"/site-packages/etc/bash_completion.d/kc_auto.rc /etc/bash_completion.d/kc_auto.rc
+    rm -f /usr/local/bin/kc
+    ln -s /opt/kc/bin/kc /usr/local/bin/
+    deactivate
+}
+
+kc_upgrade_nginx() {
+    local kc_linux_distro
+    kc_linux_distro=$(lsb_release -is)
+    local kc_distro_version
+    kc_distro_version=$(lsb_release -sc)
+
+    if [ -d /var/lib/kc-backup/nginx ]; then
+        /bin/tar -I zstd "$NGINX_BACKUP_FILE" /var/lib/kc-backup/nginx
+        rm -rf /var/lib/kc-backup/nginx
+    fi
+    # backup nginx conf
+    if [ -d /etc/nginx ]; then
+        /usr/bin/rsync -a --noatime /etc/nginx/ /var/lib/kc-backup/nginx/
+    fi
+    if [ -d /etc/php ]; then
+        /usr/bin/rsync -a --noatime /etc/php/ /var/lib/kc-backup/php/
+    fi
+    # chec if the package nginx-ee is installed
+    CHECK_NGINX_EE=$(dpkg --list | grep nginx-ee)
+    CHECK_PHP72=$(command -v php-fpm7.2)
+
+    # add new Nginx repository
+    if [ "$kc_distro_version" == "jessie" ]; then
+        # import the respository key for updates
+        curl -sL https://build.opensuse.org/projects/home:virtubox/public_key | apt-key add -
+    else
+        curl -sL https://build.opensuse.org/projects/home:virtubox/public_key | apt-key add -
+    fi
+
+    # install new nginx package
+    if {
+        if [ -n "$CHECK_NGINX_EE" ]; then
+            if [ -x /usr/local/bin/kc ]; then
+                [ -f /etc/apt/preferences.d/nginx-block ] && { mv /etc/apt/preferences.d/nginx-block /var/lib/kc/tmp/nginx-block; }
+                # stop nginx
+                service nginx stop
+                # remove previous package
+                apt-mark unhold nginx-ee nginx-common nginx-custom
+                apt-get autoremove nginx-ee nginx-common nginx-custom --allow-change-held-packages --purge -qq
+                # remove previous php-fpm pool configuration
+                if [ -n "$CHECK_PHP72" ]; then
+                    apt-get purge php7.2-fpm -y -qq
+                    rm -f /etc/php/7.2/fpm/pool.d/{www.conf,www-two.conf,debug.conf}
+                fi
+                if [ -d /etc/nginx ]; then
+                    rm -rf /etc/nginx
+                fi
+                /usr/local/bin/kc stack install --nginx --php
+                rm -f /etc/nginx/common/acl.conf /etc/nginx/htpasswd-kc
+                /usr/bin/rsync -au --noatime /var/lib/kc-backup/nginx/ /etc/nginx/
+                /usr/local/bin/kc stack upgrade --nginx --force
+            fi
+        fi
+    }; then
+        # restore sites and configuration
+        [ -f /etc/nginx/htpasswd-ee ] && { cp -f /etc/nginx/htpasswd-ee /etc/nginx/htpasswd-kc; }
+        sed -i "s/locations.conf/locations-kc.conf/" /etc/nginx/sites-available/*
+        sed -i "s/locations-php7.conf/locations-kc.conf/" /etc/nginx/sites-available/*
+        sed -i "s/locations-php71.conf/locations-kc.conf/" /etc/nginx/sites-available/*
+        sed -i "s/locations-php72.conf/locations-kc.conf/" /etc/nginx/sites-available/*
+        sed -i "s/locations-php73.conf/locations-kc.conf/" /etc/nginx/sites-available/*
+        sed -i "s/htpasswd-ee/htpasswd-kc/" /etc/nginx/common/acl.conf
+        sed -i 's/ssl on;/#ssl on;/' /var/www/*/conf/nginx/ssl.conf
+    fi
+
+    # update redis.conf headers
+    if [ -f /etc/nginx/common/redis.conf ]; then
+        sed -i "s/X-Cache /X-SRCache-Fetch-Status /g" /etc/nginx/common/redis.conf
+        sed -i "s/X-Cache-2 /X-SRCache-Store-Status /g" /etc/nginx/common/redis.conf
+
+    fi
+
+    VERIFY_NGINX_CONFIG=$(nginx -t 2>&1 | grep failed)
+    # check if nginx -t do not return errors
+    if [ -z "$VERIFY_NGINX_CONFIG" ]; then
+        systemctl stop nginx
+        systemctl start nginx
+    else
+        VERIFY_NGINX_BUCKET=$(nginx -t 2>&1 | grep "server_names_hash_bucket_size")
+        if [ -n "$VERIFY_NGINX_BUCKET" ]; then
+            sed -i "s/# server_names_hash_bucket_size 64;/server_names_hash_bucket_size 128;/g" /etc/nginx/nginx.conf
+        fi
+        systemctl stop nginx
+        systemctl start nginx
+    fi
+    [ -f /var/lib/kc/tmp/nginx-block ] && { mv /var/lib/kc/tmp/nginx-block /etc/apt/preferences.d/nginx-block; }
+    return 0
+}
+
+kc_update_latest() {
+
+    # Move ~/.my.cnf to /etc/mysql/conf.d/my.cnf
+    if [ -d /etc/mysql ]; then
+        if [ ! -f /etc/mysql/conf.d/my.cnf ]; then
+            # create conf.d folder if not exist
+            [ ! -d /etc/mysql/conf.d ] && {
+                mkdir -p /etc/mysql/conf.d
+                chmod 755 /etc/mysql/conf.d
+            }
+            if [ -f /root/.my.cnf ]; then
+                cp -f /root/.my.cnf /etc/mysql/conf.d/my.cnf
+                chmod 600 /etc/mysql/conf.d/my.cnf
+            elif [ -f "$HOME/.my.cnf" ]; then
+                cp -f "$HOME/.my.cnf" /etc/mysql/conf.d/my.cnf
+                chmod 600 /etc/mysql/conf.d/my.cnf
+            fi
+        fi
+    fi
+}
+
+kc_backup_ee() {
+    local BACKUP_EE=""
+    [ -d /etc/nginx ] && { BACKUP_EE="$BACKUP_EE /etc/nginx"; }
+    [ -d /etc/letsencrypt ] && { BACKUP_EE="$BACKUP_EE /etc/letsencrypt"; }
+    /bin/tar -I zstd -cf "$EE_BACKUP_FILE" /usr/local/bin/ee /usr/lib/ee/templates /etc/ee /var/lib/ee "$BACKUP_EE"
+    return 0
+}
+
+kc_backup_kc() {
+    if [ -d /etc/nginx ] && [ -d /etc/kc ] && [ -d /var/lib/kc ]; then
+        /bin/tar -I zstd -cf "$kc_BACKUP_FILE" /etc/nginx /etc/kc /var/lib/kc
+    fi
+    return 0
+}
+
+kc_clean_ee() {
+    local python_ver
+    python_ver=$(python3 -c "import sys; print(sys.version_info[1])")
+    rm -rf /usr/local/bin/ee /etc/bash_completion.d/ee_auto.rc /usr/lib/ee/templates /usr/local/lib/python3."$python_ver"/dist-packages/ee-*.egg /etc/ee /var/lib/ee
+    return 0
+}
+
+kc_remove_ee_cron() {
+
+    crontab -l | sed '/ee site update --le=renew --all 2> \/dev\/null/d' | crontab -
+
+}
+
+kc_domain_suffix() {
+    _curl https://raw.githubusercontent.com/publicsuffix/list/master/public_suffix_list.dat | sed '/^\/\//d' | sed '/^$/d' | sed 's/^\s+//g' >/var/lib/kc/public_suffix_list.dat
+}
+
+kc_clean() {
+    local python_ver
+    python_ver=$(python3 -c "import sys; print(sys.version_info[1])")
+    rm -rf /usr/local/lib/python3."$python_ver"/dist-packages/{kc-*.egg,cement-*.egg,keepcloud-*.egg}
+}
+
+kc_uninstall() {
+    local python_ver
+    python_ver=$(python3 -c "import sys; print(sys.version_info[1])")
+    if { python3 -m pip list | grep -q "keepcloud" >/dev/null 2>&1; }; then
+        python3 -m pip uninstall keepcloud -y
+    fi
+    rm -rf /usr/local/lib/python3."$python_ver"/dist-packages/{pystache-*,cement-2.*,kc-*,keepcloud-*} /usr/local/bin/kc /etc/bash_completion.d/kc_auto.rc /var/lib/kc /etc/kc /usr/lib/kc/templates /opt/kc
+}
+
+kc_clean_repo() {
+    # remove old EasyEngine Nginx repository
+    if [ -f /etc/apt/sources.list.d/ee-repo.list ]; then
+        cp -f /etc/apt/sources.list.d/ee-repo.list /etc/apt/sources.list.d/ee-repo.list.save
+        grep -v "/home:/rtCamp:/EasyEngine" /etc/apt/sources.list.d/ee-repo.list.save >/etc/apt/sources.list.d/ee-repo.list
+    fi
+    if [ -f /etc/apt/sources.list.d/kc-repo.list ]; then
+        local kc_linux_distro
+        kc_linux_distro=$(lsb_release -is)
+        cp -f /etc/apt/sources.list.d/kc-repo.list /etc/apt/sources.list.d/kc-repo.list.save
+        if [ "$kc_linux_distro" = "Ubuntu" ]; then
+            grep -v "opensuse" /etc/apt/sources.list.d/kc-repo.list.save >/etc/apt/sources.list.d/kc-repo.list
+        else
+            grep -v "/home:/rtCamp:/EasyEngine" /etc/apt/sources.list.d/kc-repo.list.save >/etc/apt/sources.list.d/kc-repo.list
+        fi
+    fi
+}
+
+kc_kcconf() {
+    if [ -f /etc/kc/kc.conf ]; then
+        if grep -q "log.logging" /etc/kc/kc.conf; then
+            sed -i "s/log.logging/log.colorlog/g" /etc/kc/kc.conf
+        fi
+        if ! grep -q "letsencrypt" /etc/kc/kc.conf; then
+            echo -e '\n[letsencrypt]\n\nkeylength = "ec-384"' >>/etc/kc/kc.conf
+        fi
+        if ! grep -q "php" /etc/kc/kc.conf; then
+            echo -e '\n[php]\n\nversion = 7.4' >>/etc/kc/kc.conf
+        fi
+    fi
+}
+
+kc_fix_kernel() {
+    if [ -f /opt/kc-kernel.sh ]; then
+        chmod +x /opt/kc-kernel.sh
+    fi
+}
+
+kc_init() {
+
+    ###
+    # 1- Update the apt sewers with fresh info
+    ###
+
+    if [ -z "$kc_travis" ]; then
+        # import easyengine opensusebuildservice gpg key to avoid issues with packages update
+        apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3050ac3cd2ae6f03 >/dev/null 2>&1
+        apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 0xF1656F24C74CD1D8 >/dev/null 2>&1
+        # fix digitalocean mariadb repository issue
+        sed -i 's/sfo1.mirrors.digitalocean.com\/mariadb/mariadb.mirrors.ovh.net\/MariaDB/' /etc/apt/sources.list.d/*.list >/dev/null 2>&1
+        if [ -f /etc/apt/preferences.d/MariaDB.pref ]; then
+            sed -i 's/sfo1.mirrors.digitalocean.com/mariadb.mirrors.ovh.net/' /etc/apt/preferences.d/MariaDB.pref >/dev/null 2>&1
+        fi
+        if ! {
+            apt-get update --allow-releaseinfo-change -qq >/dev/null 2>&1
+        }; then
+            apt-get update -qq >/dev/null 2>&1
+        fi
+        if ! command_exists curl; then
+            apt-get -y install curl -qq >/dev/null 2>&1
+        fi
+        if ! command_exists lsb_release; then
+            apt-get install lsb-release -qq >/dev/null 2>&1
+        fi
+        if ! command_exists jq; then
+            apt-get install jq -qq >/dev/null 2>&1
+        fi
+    fi
+    if [ "$kc_force_install" = "y" ]; then
+        [ ! -f "$HOME/.gitconfig" ] && { bash -c 'echo -e "[user]\n\tname = $USER\n\temail = root@$HOSTNAME.local" > $HOME/.gitconfig'; }
+    fi
+    if [ -f ./setup.py ]; then
+        readonly kc_version_new=$(grep "version='" setup.py | awk -F "'" '{print $2}' 2>&1)
+    else
+        readonly kc_version_new=$(curl -m 5 --retry 3 -sL https://api.github.com/repos/Keepcloud/kc/releases/latest 2>&1 | jq -r '.tag_name')
+    fi
+
+    echo ""
+    kc_lib_echo "Welcome to KeepCloud install/update script ${kc_version_new}"
+    echo ""
+
+}
+
+kc_php_fix() {
+    if [ -f /lib/systemd/system/mariadb.service ]; then
+        systemctl daemon-reload
+        systemctl enable mariadb
+    fi
+}
+
+kc_git_secure_path() {
+    if ! grep -q "safe" ~/.gitconfig; then
+        echo -e "\n[safe]\n  directory = *" >> ~/.gitconfig
+    fi
+}
+
+###
+# 4 - KC MAIN SETUP
+###
+
+# create required directories
+kc_dir_init
+# install lsb_release, curl and display header
+kc_init
+# define main variables
+kc_init_variables
+# remove old repositories
+_run kc_clean_repo
+
+if [ -z "$kc_force_install" ]; then
+    # check distribution support
+    kc_check_distro
+fi
+
+# kc uninstall script
+if [ "$kc_purge" = "y" ]; then
+    _run kc_backup_kc "Backing-up KC install"
+    _run kc_uninstall "Uninstalling KeepCloud"
+    kc_lib_echo "The KeepCloud backup files can be found in $kc_BACKUP_FILE"
+    exit 0
+else
+    # 1 - KC already installed
+    if [ -x /usr/local/bin/kc ]; then
+        _run kc_clean
+        _run kc_kcconf
+        _run kc_fix_kernel
+        _run kc_php_fix
+        # 2 - Migration from EEv3
+    else
+        if [ -x /usr/local/bin/ee ]; then
+            if [ -z "$kc_force_install" ]; then
+                echo -e "Migrate from EasyEngine to KeepCloud (y/n): " && read -r KC_ANSWER
+                if [ "$KC_ANSWER" != "y" ] && [ "$KC_ANSWER" != "Y" ]; then
+                    kc_lib_error "Not installing KeepCloud" 1
+                fi
+            fi
+            _run kc_backup_ee "Backing-up EE install"
+            _run kc_remove_ee_cron "Removing EasyEngine cronjob"
+        fi
+
+    fi
+    _run kc_install_dep "Installing kc dependencies"
+    _run kc_timesync
+    # skip steps if travis
+    if [ -z "$kc_travis" ]; then
+        #_run kc_download "Downloading Keepcloud"
+        _run kc_sync_db
+        _run kc_install "Installing Keepcloud"
+    else
+        _run kc_travis_install "Installing KeepCloud"
+    fi
+    if [ -x /usr/local/bin/ee ]; then
+        _run kc_upgrade_nginx "Upgrading Nginx"
+        _run kc_clean_ee "Cleaning previous EasyEngine install"
+    fi
+    _run kc_install_acme_sh "Running post-install steps"
+    _run kc_domain_suffix "Sufix Running"
+    _run kc_update_wp_cli "WP Cli running"
+    _run kc_update_latest "Update Latest"
+    _run secure_kc_db "Secure kc"  
+
+    kc sync
+    _run kc_git_secure_path
+
+    if [ "$ee_migration" = "1" ]; then
+        echo
+        kc_lib_echo "The migration from EasyEngine to KeepCloud was succesfull!"
+        kc_lib_echo "The EasyEngine backup files can be found in /var/lib/kc-backup/ee-backup.tgz"
+        echo
+    elif [ "$kc_upgrade" = "1" ]; then
+        kc_lib_echo "KeepCloud (kc) upgrade to $kc_version_new was succesfull!"
+        kc_lib_echo "Changelog is available on https://github.com/KeepCloud/kc/releases/tag/$kc_version_new"
+        echo
+        kc_lib_echo "To upgrade Keepcloud web stacks, you can use the command:"
+        kc_lib_echo_info "kc stack upgrade"
+        echo
+        kc_lib_echo "To update all other packages, you can use the command:"
+        kc_lib_echo_info "kc maintenance"
+    else
+        kc_lib_echo "KeepCloud (kc) installed successfully"
+        echo
+        kc_lib_echo "To enable bash-completion, just use the command:"
+        kc_lib_echo_info "bash -l"
+        echo
+        kc_lib_echo "To install KeepCloud recommended stacks, you can use the command:"
+        kc_lib_echo_info "kc stack install"
+        echo
+        kc_lib_echo "To create a first KeepCloud site, you can use the command:"
+        kc_lib_echo_info "kc site create site.tld --wp"
+    fi
+    echo
+    kc_lib_echo "KeepCloud Documentation : https://keepcloud.io"
+    kc_lib_echo "Keepcloud Community Forum : https://keepcloud.io"
+    kc_lib_echo "KeepCloud Community Chat : https://keepcloud.io"
+    echo
+    kc_lib_echo "Give KeepCloud a GitHub star : https://github.com/Keepcloud/kc/"
+    echo
+fi
