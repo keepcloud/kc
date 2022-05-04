@@ -238,7 +238,7 @@ class KCAcme:
                     .format(domain))
         acmedir = [
             '{0}'.format(sslforce), '{0}'.format(sslconf),
-            '{0}/{1}_ecc'.format(KCVar.wo_ssl_archive, domain),
+            '{0}/{1}_ecc'.format(KCVar.kc_ssl_archive, domain),
             '{0}.disabled'.format(sslconf), '{0}.disabled'
             .format(sslforce), '{0}/{1}'
             .format(KCVar.wo_ssl_live, domain),
