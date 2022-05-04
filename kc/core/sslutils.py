@@ -155,7 +155,7 @@ class SSL:
                                "preload\";")
                 hstsconf.close()
                 return 0
-        else
+        else:
             if KCFileUtils.enabledisable(
                 self, '/var/www/{0}/conf/nginx/hsts.conf',
                 enable=False
