@@ -537,6 +537,10 @@ kc_install() {
     python_venv=$(python3 -c "import sys; print(sys.version_info[1])")
     kc_lib_echo "Folder to copy" $dirpython
     echo $(pwd)
+    # Create folders to file copies
+    mkdir /opt/kc/lib/python3."$python_venv"/site-packages/usr/
+    mkdir /opt/kc/lib/python3."$python_venv"/site-packages/etc/
+    
     cp -rf /usr/* /opt/kc/lib/python3."$python_venv"/site-packages/usr/
     cp -rn /etc/* /opt/kc/lib/python3."$python_venv"/site-packages/etc/ 
     cp -f /etc/bash_completion.d/kc_auto.rc /opt/kc/lib/python3."$python_venv"/site-packages/etc/bash_completion.d/kc_auto.rc 
