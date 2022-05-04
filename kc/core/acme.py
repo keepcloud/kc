@@ -11,7 +11,7 @@ from kc.core.variables import KCVar
 
 
 class KCAcme:
-    """Acme.sh utilities for WordOps"""
+    """Acme.sh utilities for KeepCloud"""
 
     kc_acme_exec = ("/etc/letsencrypt/acme.sh --config-home "
                     "'/etc/letsencrypt/config'")
@@ -39,7 +39,7 @@ class KCAcme:
                 )
                 KCShellExec.cmd_exec(
                     self, "{0} --upgrade --auto-upgrade"
-                    .format(KCAcme.wo_acme_exec)
+                    .format(KCAcme.kc_acme_exec)
                 )
             except CommandExecutionError as e:
                 Log.debug(self, str(e))
@@ -52,7 +52,7 @@ class KCAcme:
         # check acme.sh is installed
         KCAcme.check_acme(self)
         acme_list = KCShellExec.cmd_exec_stdout(
-            self, "{0} ".format(KCAcme.wo_acme_exec) +
+            self, "{0} ".format(KCAcme.kc_acme_exec) +
             "--list --listraw")
         if acme_list:
             KCFileUtils.textwrite(self, '/var/lib/wo/cert.csv', acme_list)
@@ -66,11 +66,11 @@ class KCAcme:
         KCAcme.check_acme(self)
         # define variables
         all_domains = '\' -d \''.join(acme_domains)
-        wo_acme_dns = acmedata['acme_dns']
+        kc_acme_dns = acmedata['acme_dns']
         keylenght = acmedata['keylength']
         if acmedata['dns'] is True:
-            acme_mode = "--dns {0}".format(wo_acme_dns)
-            validation_mode = "DNS mode with {0}".format(wo_acme_dns)
+            acme_mode = "--dns {0}".format(kc_acme_dns)
+            validation_mode = "DNS mode with {0}".format(kc_acme_dns)
             if acmedata['dnsalias'] is True:
                 acme_mode = acme_mode + \
                     " --challenge-alias {0}".format(acmedata['acme_alias'])
