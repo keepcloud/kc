@@ -134,7 +134,7 @@ kc_init_variables() {
         if [ "$kc_travis" = "y" ]; then
             kc_branch=updating-configuration
         else
-            kc_branch=master
+            kc_branch=main
         fi
     fi
     readonly kc_install_log=/var/log/kc/install.log
@@ -472,7 +472,7 @@ kc_install() {
     #if [ "$kc_branch" = "master" ]; then
     #    python3 -m pip install -U keepcloud
     #else
-        python3 -m pip install -I "git+https://github.com/Keepcloud/kc.git@$kc_branch#egg=keepcloud"
+        python3 -m pip install -I "git+https://github.com/Keepcloud/kc.git@$kc_branch#egg=kc"
     #fi
     local python_venv
     python_venv=$(python3 -c "import sys; print(sys.version_info[1])")
