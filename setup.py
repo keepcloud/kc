@@ -26,7 +26,7 @@ if os.geteuid() == 0:
     if not os.path.exists('/var/lib/kc/tmp/'):
         os.makedirs('/var/lib/kc/tmp/')
 
-setup(name='keepccloud',
+setup(name='keepcloud',
       version='1.0',
       description='An essential toolset that eases server administration',
       long_description=LONG,
