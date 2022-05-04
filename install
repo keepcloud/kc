@@ -469,11 +469,11 @@ kc_install() {
         fi
     fi
 
-    if [ "$kc_branch" = "master" ]; then
-        python3 -m pip install -U keepcloud
-    else
-        python3 -m pip install -I "git+https://github.com/Keepcloud/kc.git@$kc_branch#egg=Keepcloud"
-    fi
+    #if [ "$kc_branch" = "master" ]; then
+    #    python3 -m pip install -U keepcloud
+    #else
+        python3 -m pip install -I "git+https://github.com/Keepcloud/kc.git@$kc_branch#egg=keepcloud"
+    #fi
     local python_venv
     python_venv=$(python3 -c "import sys; print(sys.version_info[1])")
     cp -rf /opt/kc/lib/python3."$python_venv"/site-packages/usr/* /usr/
@@ -855,7 +855,7 @@ else
     _run kc_domain_suffix "Sufix Running"
     _run kc_update_wp_cli "WP Cli running"
     _run kc_update_latest "Update Latest"
-    _run secure_kc_db "Secure kc"  
+    _run secure_kc_db "Secure kc"
 
     kc sync
     _run kc_git_secure_path
