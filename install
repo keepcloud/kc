@@ -593,6 +593,10 @@ kc_travis_install() {
     else
         python3 -m pip install -U "git+https://github.com/KeepCloud/keepcloud.git@$kc_branch#egg=keepcloud"
     fi
+    # cria as pastas para receber os arquivos
+    mkdir /opt/kc/lib/python3."$python_venv"/site-packages/usr/
+    mkdir /opt/kc/lib/python3."$python_venv"/site-packages/etc/
+    
     cp -rf /opt/kc/lib/python3."$python_ver"/site-packages/usr/* /usr/
     cp -rn /opt/kc/lib/python3."$python_ver"/site-packages/etc/* /etc/
     cp -f /opt/kc/lib/python3."$python_ver"/site-packages/etc/bash_completion.d/kc_auto.rc /etc/bash_completion.d/kc_auto.rc
