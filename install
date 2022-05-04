@@ -484,7 +484,7 @@ kc_install() {
     fi
 
     # Remove old clone of KeepCloud (ee) if any
-    rm -rf tmp/keepcloud &>> /dev/null
+    rm -rf /tmp/keepcloud &>> /dev/null
     
     # Clone EE 3.0 Python kc_branch
     echo "Cloning KeepCloud, please wait..."
