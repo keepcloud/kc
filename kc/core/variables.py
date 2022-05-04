@@ -123,6 +123,8 @@ class KCVar():
                 kc_deb_repo = "Debian_9.0"
             elif kc_platform_codename == 'buster':
                 kc_deb_repo = "Debian_10"
+            elif kc_platform_codename == 'bullseye':
+                kc_deb_repo = "Debian_11"
         elif kc_distro == 'raspbian':
             if kc_platform_codename == 'stretch':
                 kc_deb_repo = "Raspbian_9.0"
