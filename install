@@ -1,27 +1,4 @@
 #!/usr/bin/env bash
-# -------------------------------------------------------------------------
-# Keepcloud install and update script
-# -------------------------------------------------------------------------
-# Website:       https://Keepcloud.io
-# GitHub:        https://github.com/Keepcloud/kc
-# Copyright (c) 2019-2022 - KeepCloud
-# This script is licensed under M.I.T
-# -------------------------------------------------------------------------
-# wget -qO kc kc.cc && sudo -E bash kc
-# -------------------------------------------------------------------------
-# Version 1.0 - 2022-05-02
-# -------------------------------------------------------------------------
-
-# CONTENTS
-# ---
-# 1. VARIABLES AND DECLARATIONS
-# 2. PREPARE FOR INSTALLATION
-# 3. INSTALLATION
-# 4.
-
-###
-# 1 - Set the CLI output colors
-###
 
 CSI='\033['
 TPUT_RESET="${CSI}0m"
@@ -71,7 +48,7 @@ while [ "$#" -gt 0 ]; do
         kc_force_install="y"
         ;;
     --mainline | --beta)
-        kc_branch="mainline"
+        kc_branch="main"
         ;;
     -s | --silent)
         kc_force_install="y"
@@ -134,7 +111,7 @@ kc_init_variables() {
         if [ "$kc_travis" = "y" ]; then
             kc_branch=updating-configuration
         else
-            kc_branch=main
+            kc_branch=master
         fi
     fi
     readonly kc_install_log=/var/log/kc/install.log
@@ -218,7 +195,8 @@ kc_install_dep() {
         apt-get --option=Dpkg::options::=--force-confmiss --option=Dpkg::options::=--force-confold --assume-yes install \
             build-essential curl gzip dirmngr sudo python3-pip python3-apt python3-venv gcc python3-dev ca-certificates sqlite3 git tar \
             software-properties-common pigz apt-transport-https gnupg2 cron ccze rsync tree haveged ufw unattended-upgrades tzdata ntp zstd idn \
-            python3-distutils-extra libapt-pkg-dev bash-completion >/dev/null 2>&1
+            python3-distutils-extra libapt-pkg-dev bash-completion >/dev/null 2>&1 \
+            || kc_lib_echo "Error apt packages" $kc_linux_distro
         # add php repository gpg key
         [ -d /etc/apt/trusted.gpg.d ] && { wget -qO /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg; }
         # add nginx repository gpg key
@@ -231,6 +209,7 @@ kc_install_dep() {
     fi
     # upgrade pip
     python3 -m pip install --upgrade pip
+    
 }
 
 kc_timesync() {
@@ -428,63 +407,146 @@ kc_install_acme_sh() {
 }
 
 # KeepCloud install
+#kc_install() {
+#    local python_ver
+#    python_ver=$(python3 -c "import sys; print(sys.version_info[1])")
+#    local kc_distro_codename
+#    kc_distro_codename=$(lsb_release -sc)
+#    local kc_linux_distro
+#    kc_linux_distro=$(lsb_release -is)
+#    if [ -d /usr/local/lib/python3."$python_ver"/dist-packages ]; then
+#        cd /usr/local/lib/python3."$python_ver"/dist-packages || exit 1
+#    fi
+#    python3 -m pip uninstall -yq kc KeepCloud ee
+#    pip3 install -r requeriments.txt 
+#    cd || exit 1
+#    if [ -d /opt/kc/lib/python3."$python_ver"/site-packages/apt ]; then
+#        source /opt/kc/bin/activate
+#        python3 -m pip uninstall setuptools -y
+#        python3 -m pip install -I setuptools==57.5.0
+#        python3 -m pip install -U pip wheel
+#    else
+#        rm -rf /opt/kc
+#        python3 -m venv /opt/kc
+#        source /opt/kc/bin/activate#
+ #       python3 -m pip uninstall setuptools -y
+#        python3 -m pip install -I setuptools==57.5.0
+ #       python3 -m pip install -U pip wheel
+#        if [ "$kc_linux_distro" = "Debian" ] || [ "$kc_linux_distro" = "Raspbian" ]; then
+#            if [ "$kc_distro_codename" = "stretch" ]; then
+#                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.4.y#egg=python-apt#
+#            else
+#                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.8.4.y#egg=python-apt
+#            fi
+#        else
+#            if [ "$kc_distro_codename" = "focal" ]; then
+#                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@2.0.0#egg=python-apt
+#            elif [ "$kc_distro_codename" = "bionic" ]; then
+#                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.6.y#egg=python-apt
+#            else
+#                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.1.y-xenial#egg=python-apt
+#            fi
+#        fi
+#    fi#
+#
+#    if [ "$kc_branch" = "master" ]; then
+#        python3 -m pip install -U keepcloud
+#    else
+#        python3 -m pip install -I "git+https://github.com/Keepcloud/kc.git@$kc_branch#egg=Keepcloud"
+#    fi
+#    local python_venv
+#    python_venv=$(python3 -c "import sys; print(sys.version_info[1])")
+#    cp -rf /opt/kc/lib/python3."$python_venv"/site-packages/usr/* /usr/
+#    cp -rn /opt/kc/lib/python3."$python_venv"/site-packages/etc/* /etc/
+#    cp -f /opt/kc/lib/python3."$python_venv"/site-packages/etc/bash_completion.d/kc_auto.rc /etc/bash_completion.d/kc_auto.rc
+#    rm -rf /usr/local/bin/kc /usr/local/lib/python3."$python_venv"/dist-packages/{etc,usr}
+#    ln -s /opt/kc/bin/kc /usr/local/bin/
+#    deactivate
+#    if [ ! -d /opt/kc/lib/python3."$python_ver"/site-packages/apt ]; then
+#        python3 -m venv --system-site-packages /opt/kc
+#    fi
+#}
+
+# KeepCloud install
 kc_install() {
+    kc_lib_echo "Inicio do instalador"
     local python_ver
     python_ver=$(python3 -c "import sys; print(sys.version_info[1])")
     local kc_distro_codename
     kc_distro_codename=$(lsb_release -sc)
     local kc_linux_distro
     kc_linux_distro=$(lsb_release -is)
-    if [ -d /usr/local/lib/python3."$python_ver"/dist-packages ]; then
-        cd /usr/local/lib/python3."$python_ver"/dist-packages || exit 1
+    
+    if [ -d /usr/local/lib/python3."$python_ver"/site-packages ]; then
+        local dirpython
+        dirpython=/usr/local/lib/python3."$python_ver"/site-packages
+        cd /usr/local/lib/python3."$python_ver"/site-packages || exit 1
     fi
-    python3 -m pip uninstall -yq kc KeepCloud ee
-    cd || exit 1
+
+    # Remove old clone of KeepCloud (ee) if any
+    rm -rf tmp/keepcloud &>> /dev/null
+    
+    # Clone EE 3.0 Python kc_branch
+    echo "Cloning KeepCloud, please wait..."
+    if [ "$kc_branch" = "" ]; then
+        kc_branch=main
+    fi
+    
+    echo "Clone git branch:" $kc_branch
+
+    git clone -b main https://github.com/keepcloud/kc.git /tmp/keepcloud --quiet > /dev/null \
+    || kc_lib_echo "Unable to clone KeepCloud, exit status" $?
+
+    cd /tmp/keepcloud
+    kc_lib_echo "Instaling dependences, please wait..."
+
     if [ -d /opt/kc/lib/python3."$python_ver"/site-packages/apt ]; then
         source /opt/kc/bin/activate
-        python3 -m pip uninstall setuptools -y
-        python3 -m pip install -I setuptools==57.5.0
-        python3 -m pip install -U pip wheel
+        python -m pip uninstall setuptools -y
+        python -m pip install -I setuptools==57.5.0
+        python -m pip install -U pip wheel
     else
         rm -rf /opt/kc
-        python3 -m venv /opt/kc
+        python -m venv /opt/kc
         source /opt/kc/bin/activate
         python3 -m pip uninstall setuptools -y
-        python3 -m pip install -I setuptools==57.5.0
+        python3 -m pip install -I setuptools==57.5.0 
         python3 -m pip install -U pip wheel
         if [ "$kc_linux_distro" = "Debian" ] || [ "$kc_linux_distro" = "Raspbian" ]; then
             if [ "$kc_distro_codename" = "stretch" ]; then
-                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.4.y#egg=python-apt
+                python -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.4.y#egg=python-apt
             else
-                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.8.4.y#egg=python-apt
+                python -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.8.4.y#egg=python-apt
             fi
         else
             if [ "$kc_distro_codename" = "focal" ]; then
-                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@2.0.0#egg=python-apt
+                python -m pip3 install git+https://salsa.debian.org/apt-team/python-apt.git@2.0.0#egg=python-apt
             elif [ "$kc_distro_codename" = "bionic" ]; then
-                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.6.y#egg=python-apt
+                python -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.6.y#egg=python-apt
             else
-                python3 -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.1.y-xenial#egg=python-apt
+                python -m pip install git+https://salsa.debian.org/apt-team/python-apt.git@1.1.y-xenial#egg=python-apt
             fi
         fi
     fi
 
-    #if [ "$kc_branch" = "master" ]; then
-    #    python3 -m pip install -U keepcloud
-    #else
-        python3 -m pip install -I "git+https://github.com/Keepcloud/kc.git@$kc_branch#egg=kc"
-    #fi
+    #pip install -r requeriments.txt
+
+    kc_lib_echo "Installing KeepCloud, please wait..."
+    python setup.py install || kc_lib_error "Unable to install KeepCloud, exit status "
     local python_venv
     python_venv=$(python3 -c "import sys; print(sys.version_info[1])")
-    cp -rf /opt/kc/lib/python3."$python_venv"/site-packages/usr/* /usr/
-    cp -rn /opt/kc/lib/python3."$python_venv"/site-packages/etc/* /etc/
-    cp -f /opt/kc/lib/python3."$python_venv"/site-packages/etc/bash_completion.d/kc_auto.rc /etc/bash_completion.d/kc_auto.rc
-    rm -rf /usr/local/bin/kc /usr/local/lib/python3."$python_venv"/dist-packages/{etc,usr}
+    kc_lib_echo "Folder to copy" $dirpython
+    echo $(pwd)
+    cp -rf /usr/* /opt/kc/lib/python3."$python_venv"/site-packages/usr/
+    cp -rn /etc/* /opt/kc/lib/python3."$python_venv"/site-packages/etc/ 
+    cp -f /etc/bash_completion.d/kc_auto.rc /opt/kc/lib/python3."$python_venv"/site-packages/etc/bash_completion.d/kc_auto.rc 
+    rm -rf /usr/local/lib/python3."$python_venv"/dist-packages/{etc,usr} /usr/local/bin/kc
     ln -s /opt/kc/bin/kc /usr/local/bin/
     deactivate
     if [ ! -d /opt/kc/lib/python3."$python_ver"/site-packages/apt ]; then
         python3 -m venv --system-site-packages /opt/kc
     fi
+    
 }
 
 # Clone Github repository if it doesn't exist
@@ -501,9 +563,9 @@ kc_travis_install() {
     if [ -f ./setup.py ]; then
         if [ -d /opt/kc/lib/python3."$python_ver"/site-packages/apt ]; then
             source /opt/kc/bin/activate
-            python3 -m pip uninstall setuptools -y
-            python3 -m pip install -I setuptools==57.5.0
-            python3 -m pip install -U pip wheel
+            python3 -m pip3 uninstall setuptools -y
+            python3 -m pip3 install -I setuptools==57.5.0
+            python3 -m pip3 install -U pip wheel
         else
             rm -rf /opt/kc
             python3 -m venv /opt/kc
@@ -770,11 +832,12 @@ kc_init() {
     if [ -f ./setup.py ]; then
         readonly kc_version_new=$(grep "version='" setup.py | awk -F "'" '{print $2}' 2>&1)
     else
-        readonly kc_version_new=$(curl -m 5 --retry 3 -sL https://api.github.com/repos/Keepcloud/kc/releases/latest 2>&1 | jq -r '.tag_name')
+        readonly kc_version_new="script 1.0"
+        #$(curl -m 5 --retry 3 -sL https://api.github.com/repos/Keepcloud/kc/releases/latest 2>&1 | jq -r '.tag_name')
     fi
 
     echo ""
-    kc_lib_echo "Welcome to KeepCloud install/update script ${kc_version_new}"
+    kc_lib_echo "Welcome to KeepCloud install/update" $kc_version_new
     echo ""
 
 }
@@ -855,7 +918,7 @@ else
     _run kc_domain_suffix "Sufix Running"
     _run kc_update_wp_cli "WP Cli running"
     _run kc_update_latest "Update Latest"
-    _run secure_kc_db "Secure kc"
+    _run secure_kc_db "Secure kc"  
 
     kc sync
     _run kc_git_secure_path
