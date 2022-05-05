@@ -55,8 +55,8 @@ class KCAcme:
             self, "{0} ".format(KCAcme.kc_acme_exec) +
             "--list --listraw")
         if acme_list:
-            KCFileUtils.textwrite(self, '/var/lib/wo/cert.csv', acme_list)
-            KCFileUtils.chmod(self, '/var/lib/wo/cert.csv', 0o600)
+            KCFileUtils.textwrite(self, '/var/lib/kc/cert.csv', acme_list)
+            KCFileUtils.chmod(self, '/var/lib/kc/cert.csv', 0o600)
         else:
             Log.error(self, "Unable to export certs list")
 
@@ -90,7 +90,7 @@ class KCAcme:
         Log.info(self, "Validation mode : {0}".format(validation_mode))
         Log.wait(self, "Issuing SSL cert with acme.sh")
         if not KCShellExec.cmd_exec(
-                self, "{0} ".format(KCAcme.wo_acme_exec) +
+                self, "{0} ".format(KCAcme.kc_acme_exec) +
                 "--issue -d '{0}' {1} -k {2} -f"
                 .format(all_domains, acme_mode, keylenght)):
             Log.failed(self, "Issuing SSL cert with acme.sh")
@@ -98,7 +98,7 @@ class KCAcme:
                 Log.error(
                     self, "Please make sure your properly "
                     "set your DNS API credentials for acme.sh\n"
-                    "If you are using sudo, use \"sudo -E wo\"")
+                    "If you are using sudo, use \"sudo -E kc\"")
                 return False
             else:
                 Log.error(
@@ -130,7 +130,7 @@ class KCAcme:
                 "--fullchain-file {0}/{1}/fullchain.pem "
                 "--ca-file {0}/{1}/ca.pem --reloadcmd \"nginx -t && "
                 "service nginx restart\" "
-                .format(KCVar.wo_ssl_live,
+                .format(KCVar.kc_ssl_live,
                         kc_domain_name, KCAcme.kc_acme_exec)):
                 Log.valide(self, "Deploying SSL cert")
             else:
@@ -150,19 +150,19 @@ class KCAcme:
                     "ssl_certificate_key     {0}/{1}/key.pem;\n"
                     "ssl_trusted_certificate {0}/{1}/ca.pem;\n"
                     "ssl_stapling_verify on;\n"
-                    .format(KCVar.wo_ssl_live, kc_domain_name))
+                    .format(KCVar.kc_ssl_live, kc_domain_name))
                 sslconf.close()
 
             if not KCFileUtils.grep(self, '/var/www/22222/conf/nginx/ssl.conf',
                                     '/etc/letsencrypt'):
-                Log.info(self, "Securing WordOps backend with current cert")
+                Log.info(self, "Securing KeepCloud backend with current cert")
                 sslconf = open("/var/www/22222/conf/nginx/ssl.conf",
                                encoding='utf-8', mode='w')
                 sslconf.write("ssl_certificate     {0}/{1}/fullchain.pem;\n"
                               "ssl_certificate_key     {0}/{1}/key.pem;\n"
                               "ssl_trusted_certificate {0}/{1}/ca.pem;\n"
                               "ssl_stapling_verify on;\n"
-                              .format(KCVar.wo_ssl_live, kc_domain_name))
+                              .format(KCVar.kc_ssl_live, kc_domain_name))
                 sslconf.close()
 
             KCGit.add(self, ["/etc/letsencrypt"],
@@ -180,7 +180,7 @@ class KCAcme:
         KCAcme.check_acme(self)
         try:
             KCShellExec.cmd_exec(
-                self, "{0} ".format(KCAcme.wo_acme_exec) +
+                self, "{0} ".format(KCAcme.kc_acme_exec) +
                 "--renew -d {0} --ecc --force".format(domain))
         except CommandExecutionError as e:
             Log.debug(self, str(e))
@@ -241,7 +241,7 @@ class KCAcme:
             '{0}/{1}_ecc'.format(KCVar.kc_ssl_archive, domain),
             '{0}.disabled'.format(sslconf), '{0}.disabled'
             .format(sslforce), '{0}/{1}'
-            .format(KCVar.wo_ssl_live, domain),
+            .format(KCVar.kc_ssl_live, domain),
             '/etc/letsencrypt/shared/{0}.conf'.format(domain)]
         kc_domain = domain
         # check acme.sh is installed
