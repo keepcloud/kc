@@ -55,8 +55,8 @@ class KCAcme:
             self, "{0} ".format(KCAcme.kc_acme_exec) +
             "--list --listraw")
         if acme_list:
-            KCFileUtils.textwrite(self, '/var/lib/wo/cert.csv', acme_list)
-            KCFileUtils.chmod(self, '/var/lib/wo/cert.csv', 0o600)
+            KCFileUtils.textwrite(self, '/var/lib/kc/cert.csv', acme_list)
+            KCFileUtils.chmod(self, '/var/lib/kc/cert.csv', 0o600)
         else:
             Log.error(self, "Unable to export certs list")
 
@@ -155,7 +155,7 @@ class KCAcme:
 
             if not KCFileUtils.grep(self, '/var/www/22222/conf/nginx/ssl.conf',
                                     '/etc/letsencrypt'):
-                Log.info(self, "Securing WordOps backend with current cert")
+                Log.info(self, "Securing KeepCloud backend with current cert")
                 sslconf = open("/var/www/22222/conf/nginx/ssl.conf",
                                encoding='utf-8', mode='w')
                 sslconf.write("ssl_certificate     {0}/{1}/fullchain.pem;\n"
