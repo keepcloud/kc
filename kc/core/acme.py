@@ -241,7 +241,7 @@ class KCAcme:
             '{0}/{1}_ecc'.format(KCVar.kc_ssl_archive, domain),
             '{0}.disabled'.format(sslconf), '{0}.disabled'
             .format(sslforce), '{0}/{1}'
-            .format(KCVar.wo_ssl_live, domain),
+            .format(KCVar.kc_ssl_live, domain),
             '/etc/letsencrypt/shared/{0}.conf'.format(domain)]
         kc_domain = domain
         # check acme.sh is installed
