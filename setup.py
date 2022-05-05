@@ -27,7 +27,7 @@ if os.geteuid() == 0:
         os.makedirs('/var/lib/kc/tmp/')
 
 setup(name='keepcloud',
-      version='1.0',
+      version='1.0.0',
       description='An essential toolset that eases server administration',
       long_description=LONG,
       long_description_content_type='text/markdown',
